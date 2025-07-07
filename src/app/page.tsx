@@ -12,12 +12,11 @@ const page = () => {
         <div className="flex flex-row gap-4 items-center mt-4">
           <div className="flex flex-row gap-2 items-center">
             {" "}
-            Next.js{" "}
             <SiNextdotjs className="w-8 h-8 text-black" title="Next.js" />
           </div>
           <div className="flex flex-row gap-2 items-center">
             {" "}
-            GSAP <SiGreensock className="w-8 h-8 text-black" title="GSAP" />
+            <SiGreensock className="w-8 h-8 text-black" title="GSAP" />
           </div>
         </div>
       </div>
