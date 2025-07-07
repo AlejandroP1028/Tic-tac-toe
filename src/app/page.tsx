@@ -5,7 +5,7 @@ import { SiNextdotjs, SiGreensock } from "react-icons/si";
 const page = () => {
   return (
     <div className="w-screen h-screen flex flex-col justify-center items-center space-y-10">
-      <h1 className="text-4xl font-medium">Alejandro's Tic-Tac-Toe</h1>
+      <h1 className="text-4xl font-medium">Alejandro&apos;s Tic-Tac-Toe</h1>
       <BoxParent />
       <div className="text-lg flex flex-col items-center">
         <h4 className="font-semibold">Built with:</h4>

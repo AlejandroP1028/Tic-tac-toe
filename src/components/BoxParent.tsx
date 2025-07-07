@@ -59,7 +59,7 @@ const BoxParent = () => {
     }
 
     if (!winner && boxes.every(Boolean)) setWinner("Draw");
-  }, [boxes]);
+  }, [boxes, winner]);
 
   // slide‑out old turn, slide‑in new turn
   useEffect(() => {
