@@ -1,12 +1,12 @@
 import React from "react";
-import BoxParent from "@/components/BoxParent";
+import HomeMenu from "@/components/HomeMenu";
 import { SiNextdotjs, SiGreensock } from "react-icons/si";
 
 const page = () => {
   return (
     <div className="w-screen h-screen flex flex-col justify-center items-center space-y-10">
       <h1 className="text-4xl font-medium">Alejandro&apos;s Tic-Tac-Toe</h1>
-      <BoxParent />
+      <HomeMenu />
       <div className="text-lg flex flex-col items-center">
         <h4 className="font-semibold">Built with:</h4>
         <div className="flex flex-row gap-4 items-center mt-4">
