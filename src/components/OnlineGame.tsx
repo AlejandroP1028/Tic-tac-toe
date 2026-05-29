@@ -1,0 +1,209 @@
+"use client";
+
+import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import { getPlayerId } from "@/lib/playerId";
+import { checkWinner, emptyBoard, type GameRow, type Mark } from "@/lib/game";
+import GameBoard from "./GameBoard";
+
+const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
+  const [game, setGame] = useState<GameRow | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [myMark, setMyMark] = useState<Mark | null>(null);
+  const [opponentPresent, setOpponentPresent] = useState(false);
+  const playerIdRef = useRef<string>("");
+
+  // Resolve our seat (claiming X or O if free), then load the row.
+  useEffect(() => {
+    const playerId = getPlayerId();
+    playerIdRef.current = playerId;
+    let cancelled = false;
+
+    const init = async () => {
+      const { data: row, error } = await supabase
+        .from("games")
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error || !row) {
+        setNotFound(true);
+        return;
+      }
+
+      let current = row as GameRow;
+
+      // Already seated?
+      if (current.player_x === playerId) setMyMark("X");
+      else if (current.player_o === playerId) setMyMark("O");
+      else if (!current.player_x) {
+        const { data } = await supabase
+          .from("games")
+          .update({ player_x: playerId })
+          .eq("code", code)
+          .is("player_x", null)
+          .select()
+          .maybeSingle();
+        if (data) {
+          current = data as GameRow;
+          setMyMark("X");
+        }
+      }
+
+      // If X claim failed or was taken, try O.
+      if (!cancelled && myMarkUnset(current, playerId) && !current.player_o) {
+        const { data } = await supabase
+          .from("games")
+          .update({ player_o: playerId })
+          .eq("code", code)
+          .is("player_o", null)
+          .select()
+          .maybeSingle();
+        if (data) {
+          current = data as GameRow;
+          setMyMark("O");
+        }
+      }
+
+      if (!cancelled) setGame(current);
+    };
+
+    init();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+
+  // Subscribe to row changes + presence.
+  useEffect(() => {
+    const playerId = playerIdRef.current;
+    const channel = supabase
+      .channel(`game:${code}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "games", filter: `code=eq.${code}` },
+        (payload) => setGame(payload.new as GameRow)
+      )
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{ playerId: string }>();
+        const present = Object.values(state)
+          .flat()
+          .some((p) => p.playerId !== playerId);
+        setOpponentPresent(present);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ playerId });
+          // Re-fetch on (re)connect so a missed change event self-heals.
+          const { data } = await supabase
+            .from("games")
+            .select("*")
+            .eq("code", code)
+            .maybeSingle();
+          if (data) setGame(data as GameRow);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [code]);
+
+  const makeMove = async (idx: number) => {
+    if (!game || !myMark) return;
+    if (game.winner || game.turn !== myMark || game.board[idx]) return;
+
+    const board = [...game.board];
+    board[idx] = myMark;
+    const winner = checkWinner(board);
+
+    const update: Partial<GameRow> = {
+      board,
+      turn: myMark === "X" ? "O" : "X",
+      winner,
+    };
+    if (winner === "X") update.score_x = game.score_x + 1;
+    if (winner === "O") update.score_o = game.score_o + 1;
+
+    // turn guard: the DB rejects the write if it is no longer our turn.
+    const { data } = await supabase
+      .from("games")
+      .update(update)
+      .eq("code", code)
+      .eq("turn", myMark)
+      .select()
+      .maybeSingle();
+    if (data) setGame(data as GameRow);
+  };
+
+  const resetBoard = async () => {
+    if (!game) return;
+    const { data } = await supabase
+      .from("games")
+      .update({ board: emptyBoard(), turn: "X", winner: null })
+      .eq("code", code)
+      .select()
+      .maybeSingle();
+    if (data) setGame(data as GameRow);
+  };
+
+  if (notFound) {
+    return (
+      <div className="w-screen h-screen flex flex-col justify-center items-center space-y-4">
+        <h1 className="text-3xl font-medium">Room &ldquo;{code}&rdquo; not found</h1>
+        <Link href="/" className="text-blue-600 underline">
+          Back to home
+        </Link>
+      </div>
+    );
+  }
+
+  if (!game) {
+    return (
+      <div className="w-screen h-screen flex justify-center items-center">
+        <p className="text-xl text-gray-500">Loading room&hellip;</p>
+      </div>
+    );
+  }
+
+  const status = !opponentPresent
+    ? "Waiting for opponent…"
+    : myMark
+    ? "Opponent connected"
+    : "Spectating";
+
+  const disabled =
+    !myMark || !!game.winner || game.turn !== myMark || !opponentPresent;
+
+  return (
+    <div className="w-screen min-h-screen flex flex-col justify-center items-center space-y-8 py-10">
+      <div className="flex flex-col items-center space-y-2">
+        <h1 className="text-3xl font-medium">Room {code}</h1>
+        <p className="text-sm text-gray-500">
+          {myMark ? `You are ${myMark}` : "Spectator"} &middot; share this code to invite a friend
+        </p>
+      </div>
+      <GameBoard
+        board={game.board}
+        turn={game.turn}
+        winner={game.winner}
+        scores={{ X: game.score_x, O: game.score_o }}
+        myMark={myMark}
+        disabled={disabled}
+        status={status}
+        onCellClick={makeMove}
+        onReset={resetBoard}
+      />
+    </div>
+  );
+};
+
+/** Helper: have we NOT claimed/own a seat on this row? */
+function myMarkUnset(row: GameRow, playerId: string): boolean {
+  return row.player_x !== playerId && row.player_o !== playerId;
+}
+
+export default OnlineGame;
