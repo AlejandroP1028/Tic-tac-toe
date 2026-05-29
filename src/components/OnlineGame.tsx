@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getPlayerId } from "@/lib/playerId";
@@ -12,12 +12,10 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
   const [notFound, setNotFound] = useState(false);
   const [myMark, setMyMark] = useState<Mark | null>(null);
   const [opponentPresent, setOpponentPresent] = useState(false);
-  const playerIdRef = useRef<string>("");
 
   // Resolve our seat (claiming X or O if free), then load the row.
   useEffect(() => {
     const playerId = getPlayerId();
-    playerIdRef.current = playerId;
     let cancelled = false;
 
     const init = async () => {
@@ -74,12 +72,13 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
   // Subscribe to row changes + presence.
   useEffect(() => {
-    const playerId = playerIdRef.current;
+    // getPlayerId() is idempotent; call it directly so this effect does not
+    // depend on the init effect having already populated the ref.
+    const playerId = getPlayerId();
     const channel = supabase
       .channel(`game:${code}`)
       .on(
