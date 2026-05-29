@@ -7,16 +7,17 @@ import gsap from "gsap";
 interface BoxProps {
   turn: "X" | "O";
   value: string | null;
+  disabled?: boolean;
   onClick: () => void;
 }
 
-const Box: React.FC<BoxProps> = ({ value, onClick, turn }) => {
+const Box: React.FC<BoxProps> = ({ value, onClick, turn, disabled }) => {
   const finalRef = useRef<SVGSVGElement | null>(null); // for click animation
   const previewRef = useRef<SVGSVGElement | null>(null); // for hover preview
   const [hover, setHover] = useState(false);
   const prevValue = useRef<string | null>(null);
 
-  /** pop‑in animation when value is set */
+  /** pop-in animation when value is set */
   useEffect(() => {
     if (value && value !== prevValue.current && finalRef.current) {
       gsap.fromTo(
@@ -29,7 +30,7 @@ const Box: React.FC<BoxProps> = ({ value, onClick, turn }) => {
   }, [value]);
 
   const previewIcon = () => {
-    if (!hover || value) return null;
+    if (!hover || value || disabled) return null;
     return turn === "X" ? (
       <X
         ref={previewRef}
@@ -56,7 +57,8 @@ const Box: React.FC<BoxProps> = ({ value, onClick, turn }) => {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={onClick}
-      className="aspect-square w-full flex items-center justify-center border border-gray-400 rounded-xl hover:bg-gray-100 select-none"
+      disabled={disabled}
+      className="aspect-square w-full flex items-center justify-center border border-gray-400 rounded-xl hover:bg-gray-100 select-none disabled:cursor-not-allowed disabled:hover:bg-transparent"
     >
       {previewIcon()}
       {placedIcon()}
