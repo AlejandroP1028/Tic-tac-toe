@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-An online, real-time Tic-Tac-Toe game on Next.js 15 (App Router) + React 19 + Tailwind v4, with GSAP animations and Supabase Realtime as the backend. Two browsers play the same match, joined by a shareable room code. No accounts — identity is an anonymous per-browser ID.
+An online, real-time Tic-Tac-Toe game on Next.js 16 (App Router, Turbopack) + React 19.2 + Tailwind v4, with GSAP animations and Supabase Realtime as the backend. Two browsers play the same match, joined by a shareable room code. No accounts — identity is an anonymous per-browser ID.
 
 - `src/lib/game.ts` — pure, React-free game logic (`LINES`, `checkWinner`, `emptyBoard`, types incl. `GameRow`). The only unit-tested module (`game.test.ts`).
 - `src/lib/supabase.ts` — browser Supabase client from the `NEXT_PUBLIC_SUPABASE_*` env vars.
