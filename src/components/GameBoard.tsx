@@ -1,67 +1,49 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import Box from "./Box";
+import React, { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { X, Circle } from "lucide-react";
-const lines = [
-  [0, 1, 2],
-  [3, 4, 5],
-  [6, 7, 8],
-  [0, 3, 6],
-  [1, 4, 7],
-  [2, 5, 8],
-  [0, 4, 8],
-  [2, 4, 6],
-];
+import Box from "./Box";
+import type { Board, Mark, Winner } from "@/lib/game";
 
-const BoxParent = () => {
-  const [boxes, setBoxes] = useState<string[]>(Array(9).fill(null));
-  const [turn, setTurn] = useState<"X" | "O">("X");
+interface GameBoardProps {
+  board: Board;
+  turn: Mark;
+  winner: Winner;
+  scores: { X: number; O: number };
+  myMark: Mark | null; // null = spectator
+  disabled: boolean;
+  status: string;
+  onCellClick: (idx: number) => void;
+  onReset: () => void;
+}
+
+const GameBoard: React.FC<GameBoardProps> = ({
+  board,
+  turn,
+  winner,
+  scores,
+  myMark,
+  disabled,
+  status,
+  onCellClick,
+  onReset,
+}) => {
   const turnRef = useRef<HTMLSpanElement>(null);
   const scoreXRef = useRef<HTMLSpanElement>(null);
   const scoreORef = useRef<HTMLSpanElement>(null);
-  const [winner, setWinner] = useState<string | null>(null);
-  const [scores, setScores] = useState({ X: 0, O: 0 });
   const resultRef = useRef<HTMLHeadingElement>(null);
 
   const playResultAnimation = (element: HTMLHeadingElement) => {
     gsap.killTweensOf(element);
-
     const tl = gsap.timeline();
     tl.fromTo(
       element,
       { scale: 0.6, opacity: 0, rotate: -15 },
-      {
-        scale: 1.15,
-        opacity: 1,
-        rotate: 0,
-        duration: 0.5,
-        ease: "back.out(1.8)",
-      }
-    ).to(element, {
-      scale: 1,
-      duration: 0.3,
-      ease: "power1.out",
-    });
+      { scale: 1.15, opacity: 1, rotate: 0, duration: 0.5, ease: "back.out(1.8)" }
+    ).to(element, { scale: 1, duration: 0.3, ease: "power1.out" });
   };
 
-  useEffect(() => {
-    for (const [a, b, c] of lines) {
-      if (boxes[a] && boxes[a] === boxes[b] && boxes[a] === boxes[c]) {
-        setWinner(boxes[a]);
-        setScores((prev) => ({
-          ...prev,
-          [boxes[a] as "X" | "O"]: prev[boxes[a] as "X" | "O"] + 1,
-        }));
-        return;
-      }
-    }
-
-    if (boxes.every(Boolean)) setWinner("Draw");
-  }, [boxes]);
-
-  // slide‑out old turn, slide‑in new turn
   useEffect(() => {
     if (turnRef.current) {
       gsap.fromTo(
@@ -71,13 +53,11 @@ const BoxParent = () => {
       );
     }
   }, [turn]);
+
   useEffect(() => {
-    if (winner && resultRef.current) {
-      playResultAnimation(resultRef.current);
-    }
+    if (winner && resultRef.current) playResultAnimation(resultRef.current);
   }, [winner]);
 
-  // bump the relevant counter when scores change
   useEffect(() => {
     if (scoreXRef.current) {
       gsap.fromTo(
@@ -98,35 +78,19 @@ const BoxParent = () => {
     }
   }, [scores.O]);
 
-  const handleClick = (idx: number) => {
-    if (boxes[idx] || winner) return;
-    const next = [...boxes];
-    next[idx] = turn;
-    setBoxes(next);
-    setTurn(turn === "X" ? "O" : "X");
-  };
-
-  const resetBoard = () => {
-    setBoxes(Array(9).fill(null));
-    setWinner(null);
-    setTurn("X");
-
-    requestAnimationFrame(() => {
-      if (resultRef.current) {
-        playResultAnimation(resultRef.current);
-      }
-    });
-  };
+  // Hover preview shows the player's own mark (spectators are disabled anyway).
+  const previewMark: Mark = myMark ?? turn;
 
   return (
     <div className="flex flex-col md:flex-row justify-center items-center gap-8 bg-white/50 md:border md:border-gray-300 p-6 md:p-8 rounded-xl md:shadow-md w-full max-w-3xl mx-auto">
       <div className="w-full max-w-sm grid grid-cols-3 gap-4">
-        {boxes.map((val, idx) => (
+        {board.map((val, idx) => (
           <Box
             key={idx}
             value={val}
-            turn={turn}
-            onClick={() => handleClick(idx)}
+            turn={previewMark}
+            disabled={disabled}
+            onClick={() => onCellClick(idx)}
           />
         ))}
       </div>
@@ -150,11 +114,9 @@ const BoxParent = () => {
         >
           {winner ? (
             winner === "Draw" ? (
-              <span className="text-yellow-600">It’s a draw!</span>
+              <span className="text-yellow-600">It&rsquo;s a draw!</span>
             ) : (
-              <span
-                className={winner === "X" ? "text-blue-600" : "text-red-600"}
-              >
+              <span className={winner === "X" ? "text-blue-600" : "text-red-600"}>
                 {winner} wins!
               </span>
             )
@@ -171,6 +133,8 @@ const BoxParent = () => {
             </span>
           )}
         </h1>
+
+        <p className="text-center text-sm text-gray-500 min-h-5">{status}</p>
 
         <section className="space-y-4">
           <h2 className="text-3xl">Scores: </h2>
@@ -193,7 +157,7 @@ const BoxParent = () => {
         </section>
 
         <button
-          onClick={resetBoard}
+          onClick={onReset}
           className=" bg-gray-100 w-fit self-center text-black px-4 py-2 rounded hover:bg-gray-200 transition"
         >
           Reset
@@ -203,4 +167,4 @@ const BoxParent = () => {
   );
 };
 
-export default BoxParent;
+export default GameBoard;
