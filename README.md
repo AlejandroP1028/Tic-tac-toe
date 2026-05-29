@@ -20,7 +20,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 This app needs a Supabase project for real-time multiplayer.
 
-1. Create a Supabase project and run `supabase/migrations/0001_create_games.sql` in the SQL Editor.
+1. Create a Supabase project and run the SQL files in `supabase/migrations/` in order (`0001_create_games.sql`, then `0002_board_size_and_rounds.sql`) in the SQL Editor.
 2. Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 3. `npm run dev`.
 

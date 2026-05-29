@@ -1,10 +1,18 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getPlayerId } from "@/lib/playerId";
-import { checkWinner, emptyBoard, type GameRow, type Mark } from "@/lib/game";
+import {
+  countLines,
+  emptyBoard,
+  isFull,
+  roundWinner,
+  startingMark,
+  type GameRow,
+  type Mark,
+} from "@/lib/game";
 import GameBoard from "./GameBoard";
 
 const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
@@ -33,7 +41,6 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
 
       let current = row as GameRow;
 
-      // Already seated?
       if (current.player_x === playerId) setMyMark("X");
       else if (current.player_o === playerId) setMyMark("O");
       else if (!current.player_x) {
@@ -50,8 +57,12 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
         }
       }
 
-      // If X claim failed or was taken, try O.
-      if (!cancelled && myMarkUnset(current, playerId) && !current.player_o) {
+      if (
+        !cancelled &&
+        current.player_x !== playerId &&
+        current.player_o !== playerId &&
+        !current.player_o
+      ) {
         const { data } = await supabase
           .from("games")
           .update({ player_o: playerId })
@@ -76,8 +87,6 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
 
   // Subscribe to row changes + presence.
   useEffect(() => {
-    // getPlayerId() is idempotent; call it directly so this effect does not
-    // depend on the init effect having already populated the ref.
     const playerId = getPlayerId();
     const channel = supabase
       .channel(`game:${code}`)
@@ -117,17 +126,20 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
 
     const board = [...game.board];
     board[idx] = myMark;
-    const winner = checkWinner(board);
 
-    const update: Partial<GameRow> = {
-      board,
-      turn: myMark === "X" ? "O" : "X",
-      winner,
-    };
-    if (winner === "X") update.score_x = game.score_x + 1;
-    if (winner === "O") update.score_o = game.score_o + 1;
+    let update: Partial<GameRow>;
+    if (isFull(board)) {
+      const tally = countLines(board, game.size);
+      const winner = roundWinner(tally);
+      update = { board, winner };
+      if (winner === "X") update.score_x = game.score_x + 1;
+      if (winner === "O") update.score_o = game.score_o + 1;
+    } else {
+      update = { board, turn: myMark === "X" ? "O" : "X", winner: null };
+    }
 
-    // turn guard: the DB rejects the write if it is no longer our turn.
+    // turn guard: the DB rejects the write if it is no longer our turn,
+    // which also prevents any double score increment on the filling move.
     const { data } = await supabase
       .from("games")
       .update(update)
@@ -138,16 +150,35 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
     if (data) setGame(data as GameRow);
   };
 
-  const resetBoard = async () => {
-    if (!game) return;
+  // Clear the board and start the next round (alternating starter), keeping
+  // scores. Guarded by `round` so it applies exactly once across both clients.
+  const nextRound = useCallback(async () => {
+    if (!game || !myMark) return;
+    const next = game.round + 1;
     const { data } = await supabase
       .from("games")
-      .update({ board: emptyBoard(), turn: "X", winner: null })
+      .update({
+        board: emptyBoard(game.size),
+        winner: null,
+        round: next,
+        turn: startingMark(next),
+      })
       .eq("code", code)
+      .eq("round", game.round)
       .select()
       .maybeSingle();
     if (data) setGame(data as GameRow);
-  };
+  }, [game, myMark, code]);
+
+  // Auto-replay ~2s after a round ends (board full). Only seated players run the
+  // timer; the round guard in nextRound makes the reset idempotent.
+  useEffect(() => {
+    if (!game?.winner || !myMark) return;
+    const timer = setTimeout(() => {
+      nextRound();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [game?.winner, myMark, nextRound]);
 
   if (notFound) {
     return (
@@ -177,32 +208,32 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
   const disabled =
     !myMark || !!game.winner || game.turn !== myMark || !opponentPresent;
 
+  const roundTally = countLines(game.board, game.size);
+
   return (
     <div className="w-screen min-h-screen flex flex-col justify-center items-center space-y-8 py-10">
       <div className="flex flex-col items-center space-y-2">
         <h1 className="text-3xl font-medium">Room {code}</h1>
         <p className="text-sm text-gray-500">
-          {myMark ? `You are ${myMark}` : "Spectator"} &middot; share this code to invite a friend
+          {myMark ? `You are ${myMark}` : "Spectator"} &middot; {game.size}×{game.size} board &middot; share this code to invite a friend
         </p>
       </div>
       <GameBoard
         board={game.board}
+        size={game.size}
         turn={game.turn}
         winner={game.winner}
+        round={game.round}
         scores={{ X: game.score_x, O: game.score_o }}
+        roundTally={roundTally}
         myMark={myMark}
         disabled={disabled}
         status={status}
         onCellClick={makeMove}
-        onReset={resetBoard}
+        onReset={nextRound}
       />
     </div>
   );
 };
-
-/** Helper: have we NOT claimed/own a seat on this row? */
-function myMarkUnset(row: GameRow, playerId: string): boolean {
-  return row.player_x !== playerId && row.player_o !== playerId;
-}
 
 export default OnlineGame;

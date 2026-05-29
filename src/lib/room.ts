@@ -13,16 +13,21 @@ function randomCode(length = 4): string {
 }
 
 /**
- * Inserts a fresh game row and returns its code. Retries on the rare code
- * collision (Postgres unique-violation 23505).
+ * Inserts a fresh game row of the given board size and returns its code.
+ * Retries on the rare code collision (Postgres unique-violation 23505).
  */
-export async function createGame(): Promise<string> {
+export async function createGame(size: number): Promise<string> {
+  if (!Number.isInteger(size) || size < 3 || size > 8) {
+    throw new Error("Board size must be an integer between 3 and 8.");
+  }
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomCode();
     const { error } = await supabase.from("games").insert({
       code,
-      board: emptyBoard(),
+      board: emptyBoard(size),
       turn: "X",
+      size,
+      round: 1,
     });
     if (!error) return code;
     if (error.code !== "23505") throw error;
