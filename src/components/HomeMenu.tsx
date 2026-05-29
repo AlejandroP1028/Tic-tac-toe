@@ -7,6 +7,7 @@ import { createGame } from "@/lib/room";
 const HomeMenu: React.FC = () => {
   const router = useRouter();
   const [code, setCode] = useState("");
+  const [size, setSize] = useState(3);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,7 +15,7 @@ const HomeMenu: React.FC = () => {
     setBusy(true);
     setError(null);
     try {
-      const newCode = await createGame();
+      const newCode = await createGame(size);
       router.push(`/game/${newCode}`);
     } catch {
       setError("Could not create a game. Please try again.");
@@ -30,6 +31,28 @@ const HomeMenu: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center space-y-6 w-full max-w-sm">
+      <div className="flex items-center justify-between w-full gap-3">
+        <label htmlFor="size" className="text-lg">
+          Board size
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="size"
+            type="number"
+            min={3}
+            max={8}
+            value={size}
+            onChange={(e) =>
+              setSize(Math.min(8, Math.max(3, Number(e.target.value) || 3)))
+            }
+            className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-center"
+          />
+          <span className="text-gray-500">
+            {size}×{size}
+          </span>
+        </div>
+      </div>
+
       <button
         onClick={handleCreate}
         disabled={busy}
