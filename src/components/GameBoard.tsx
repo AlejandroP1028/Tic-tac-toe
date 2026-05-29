@@ -8,21 +8,27 @@ import type { Board, Mark, Winner } from "@/lib/game";
 
 interface GameBoardProps {
   board: Board;
+  size: number;
   turn: Mark;
   winner: Winner;
-  scores: { X: number; O: number };
+  round: number;
+  scores: { X: number; O: number }; // rounds won
+  roundTally: { X: number; O: number }; // live lines this round
   myMark: Mark | null; // null = spectator
   disabled: boolean;
   status: string;
   onCellClick: (idx: number) => void;
-  onReset: () => void;
+  onReset: () => void; // "skip round"
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
   board,
+  size,
   turn,
   winner,
+  round,
   scores,
+  roundTally,
   myMark,
   disabled,
   status,
@@ -83,7 +89,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   return (
     <div className="flex flex-col md:flex-row justify-center items-center gap-8 bg-white/50 md:border md:border-gray-300 p-6 md:p-8 rounded-xl md:shadow-md w-full max-w-3xl mx-auto">
-      <div className="w-full max-w-sm grid grid-cols-3 gap-4">
+      <div
+        className="w-full max-w-md grid gap-2 md:gap-3"
+        style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+      >
         {board.map((val, idx) => (
           <Box
             key={idx}
@@ -99,7 +108,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       <div className="w-full md:w-[300px] flex flex-col justify-between space-y-6">
         <h1
           ref={resultRef}
-          className={`text-2xl md:text-4xl text-center rounded-md flex h-28 items-center justify-center p-4 transition-all
+          className={`text-2xl md:text-3xl text-center rounded-md flex h-28 items-center justify-center p-4 transition-all
   ${
     winner
       ? winner === "Draw"
@@ -114,10 +123,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
         >
           {winner ? (
             winner === "Draw" ? (
-              <span className="text-yellow-600">It&rsquo;s a draw!</span>
+              <span className="text-yellow-600">Round draw!</span>
             ) : (
               <span className={winner === "X" ? "text-blue-600" : "text-red-600"}>
-                {winner} wins!
+                {winner} wins the round!
               </span>
             )
           ) : (
@@ -136,8 +145,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
         <p className="text-center text-sm text-gray-500 min-h-5">{status}</p>
 
+        <section className="space-y-2">
+          <h2 className="text-xl">Round {round} — lines this round</h2>
+          <div className="flex flex-row gap-6 text-lg font-medium">
+            <span className="text-blue-600">X: {roundTally.X}</span>
+            <span className="text-red-600">O: {roundTally.O}</span>
+          </div>
+        </section>
+
         <section className="space-y-4">
-          <h2 className="text-3xl">Scores: </h2>
+          <h2 className="text-3xl">Rounds won</h2>
           <div className="space-y-2 flex flex-row space-x-4 w-full">
             <div className="flex text-2xl items-center justify-between bg-blue-50 w-full text-blue-600 p-8 rounded">
               <span>X: </span>
@@ -160,7 +177,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           onClick={onReset}
           className=" bg-gray-100 w-fit self-center text-black px-4 py-2 rounded hover:bg-gray-200 transition"
         >
-          Reset
+          Skip round
         </button>
       </div>
     </div>
