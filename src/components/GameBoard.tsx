@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { X, Circle } from "lucide-react";
 import Box from "./Box";
@@ -19,9 +19,12 @@ interface GameBoardProps {
   status: string;
   onCellClick: (idx: number) => void;
   onReset: () => void; // "skip round"
+  onWinSequenceEnd?: () => void; // fired when the win animation lands (→ next round)
 }
 
 const lineKey = (line: Line) => [...line.cells].sort((a, b) => a - b).join("-");
+
+const MARK_COLOR: Record<Mark, string> = { X: "#2563eb", O: "#dc2626" };
 
 const GameBoard: React.FC<GameBoardProps> = ({
   board,
@@ -36,6 +39,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   status,
   onCellClick,
   onReset,
+  onWinSequenceEnd,
 }) => {
   const turnRef = useRef<HTMLSpanElement>(null);
   const scoreXRef = useRef<HTMLSpanElement>(null);
@@ -43,6 +47,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const resultRef = useRef<HTMLHeadingElement>(null);
 
   const gridRef = useRef<HTMLDivElement>(null);
+  const confettiRef = useRef<HTMLDivElement>(null);
+  const linesRef = useRef<Line[]>([]);
+  const onEndRef = useRef(onWinSequenceEnd);
   const [metrics, setMetrics] = useState<{
     w: number;
     h: number;
@@ -51,6 +58,44 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const prevBoardRef = useRef<Board>(board);
   const prevLineKeysRef = useRef<Set<string>>(new Set());
   const lineEls = useRef<Map<string, SVGLineElement>>(new Map());
+
+  // Burst colored confetti out of the left and right edges of the grid.
+  const fireConfetti = useCallback((who: Winner) => {
+    const layer = confettiRef.current;
+    if (!layer) return;
+    const colors =
+      who === "Draw" ? [MARK_COLOR.X, MARK_COLOR.O] : [MARK_COLOR[who as Mark]];
+    const h = layer.clientHeight || 1;
+    for (const dir of [-1, 1] as const) {
+      for (let i = 0; i < 16; i++) {
+        const p = document.createElement("div");
+        const s = 6 + Math.random() * 7;
+        p.style.position = "absolute";
+        p.style.top = `${Math.random() * h}px`;
+        p.style[dir === -1 ? "left" : "right"] = "0px";
+        p.style.width = `${s}px`;
+        p.style.height = `${s}px`;
+        p.style.borderRadius = Math.random() > 0.5 ? "50%" : "2px";
+        p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        p.style.pointerEvents = "none";
+        layer.appendChild(p);
+        gsap.fromTo(
+          p,
+          { opacity: 1, scale: 1 },
+          {
+            x: dir * (90 + Math.random() * 180),
+            y: -70 + Math.random() * 220,
+            rotation: Math.random() * 720 - 360,
+            opacity: 0,
+            scale: 0.4,
+            duration: 1.1 + Math.random() * 0.9,
+            ease: "power2.out",
+            onComplete: () => p.remove(),
+          }
+        );
+      }
+    }
+  }, []);
 
   const playResultAnimation = (element: HTMLHeadingElement) => {
     gsap.killTweensOf(element);
@@ -125,60 +170,164 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const cy = (idx: number) => Math.floor(idx / size) * (cellH + gap) + cellH / 2;
   const strokeW = Math.max(3, Math.min(cellW, cellH) * 0.15);
 
-  // Animate newly appeared lines (draw-on), then remember current keys + board.
+  // Keep the latest derived lines / callback in refs so the win timeline can
+  // depend only on `winner` (these change identity every render otherwise).
   useEffect(() => {
-    // Find the just-placed cell (null -> mark) to orient the draw-on animation.
-    // Reading the ref here (in an effect) keeps render pure.
-    let placed = -1;
-    const prevBoard = prevBoardRef.current;
-    if (prevBoard.length === board.length) {
-      for (let i = 0; i < board.length; i++) {
-        if (!prevBoard[i] && board[i]) {
-          placed = i;
-          break;
+    linesRef.current = lines;
+  });
+  useEffect(() => {
+    onEndRef.current = onWinSequenceEnd;
+  }, [onWinSequenceEnd]);
+
+  // Animate newly appeared lines (draw-on), then remember current keys + board.
+  // Skipped while a round is resolved — the win timeline owns the lines then.
+  useEffect(() => {
+    if (!winner) {
+      // Find the just-placed cell (null -> mark) to orient the draw-on animation.
+      // Reading the ref here (in an effect) keeps render pure.
+      let placed = -1;
+      const prevBoard = prevBoardRef.current;
+      if (prevBoard.length === board.length) {
+        for (let i = 0; i < board.length; i++) {
+          if (!prevBoard[i] && board[i]) {
+            placed = i;
+            break;
+          }
         }
       }
-    }
 
-    const prevKeys = prevLineKeysRef.current;
-    for (const line of lines) {
-      const key = lineKey(line);
-      if (!prevKeys.has(key)) {
-        const el = lineEls.current.get(key);
-        if (el) {
-          const len = el.getTotalLength();
-          // The line is drawn anchor (cells[0]) -> cells[2]. A positive dash
-          // offset draws from the anchor end; a negative one from the far end.
-          // Originate the draw at the just-placed mark when it is an endpoint.
-          const fromFarEnd = placed === line.cells[2];
-          gsap.fromTo(
-            el,
-            { strokeDasharray: len, strokeDashoffset: fromFarEnd ? -len : len },
-            { strokeDashoffset: 0, duration: 0.4, ease: "power2.out" }
-          );
+      const prevKeys = prevLineKeysRef.current;
+      for (const line of lines) {
+        const key = lineKey(line);
+        if (!prevKeys.has(key)) {
+          const el = lineEls.current.get(key);
+          if (el) {
+            const len = el.getTotalLength();
+            // The line is drawn anchor (cells[0]) -> cells[2]. A positive dash
+            // offset draws from the anchor end; a negative one from the far end.
+            // Originate the draw at the just-placed mark when it is an endpoint.
+            const fromFarEnd = placed === line.cells[2];
+            gsap.fromTo(
+              el,
+              { strokeDasharray: len, strokeDashoffset: fromFarEnd ? -len : len },
+              { strokeDashoffset: 0, duration: 0.4, ease: "power2.out" }
+            );
+          }
         }
       }
     }
     prevLineKeysRef.current = new Set(lines.map(lineKey));
     prevBoardRef.current = board;
-  }, [board, lines]);
+  }, [board, lines, winner]);
+
+  // Win choreography: slowly replay every scored line, hold, float the whole
+  // board up, then slam it down — and on that landing burst the winner's
+  // confetti and trigger the round reset (so the board lands cleared).
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!winner) {
+      if (grid) gsap.set(grid, { clearProps: "transform" });
+      return;
+    }
+
+    const wonLines = linesRef.current;
+    const n = wonLines.length;
+    const stagger = n > 1 ? Math.min(0.3, 1.6 / n) : 0;
+    const tl = gsap.timeline();
+
+    // Establish the 3D context up front (neutral at z:0) so the float tween
+    // only animates z/y/rotationX. Introducing perspective inside the tween
+    // makes the first frame snap to a larger size.
+    if (grid) {
+      gsap.set(grid, {
+        transformPerspective: 1000,
+        transformOrigin: "center center",
+        z: 0,
+        y: 0,
+        rotationX: 0,
+      });
+    }
+
+    wonLines.forEach((line, i) => {
+      const el = lineEls.current.get(lineKey(line));
+      if (!el) return;
+      const len = el.getTotalLength();
+      tl.fromTo(
+        el,
+        { strokeDasharray: len, strokeDashoffset: len },
+        { strokeDashoffset: 0, duration: 1.1, ease: "power2.out", overwrite: true },
+        i * stagger
+      );
+    });
+
+    if (grid) {
+      // Settle, then let the board float up and tilt toward the viewer. The
+      // slight lift (y) and forward tilt (rotationX) give the z-push real depth
+      // so it reads as floating closer, not a flat zoom. sine.inOut eases out of
+      // the hold (no jerk from rest) and decelerates as it nears the apex.
+      tl.to(
+        grid,
+        {
+          z: 50,
+          y: -22,
+          rotationX: 7,
+          duration: 2.4,
+          ease: "sine.inOut",
+        },
+        "+=0.6"
+      );
+      // Accelerate back down into a weighted landing (power3.in = gathering
+      // speed toward the floor); confetti bursts on that impact.
+      tl.to(grid, {
+        z: 0,
+        y: 0,
+        rotationX: 0,
+        duration: 0.4,
+        ease: "power3.in",
+        onComplete: () => fireConfetti(winner),
+      });
+      // A small impact compression that springs back out, then hand off to the
+      // round reset so the cleared board lands settled rather than mid-snap.
+      tl.to(grid, { z: -10, duration: 0.1, ease: "power2.out" }).to(grid, {
+        z: 0,
+        duration: 0.5,
+        ease: "elastic.out(1, 0.45)",
+        onComplete: () => onEndRef.current?.(),
+      });
+    }
+
+    return () => {
+      tl.kill();
+    };
+  }, [winner, fireConfetti]);
 
   return (
     <div className="flex flex-col md:flex-row justify-center items-center gap-8 bg-white/50 md:border md:border-gray-300 p-6 md:p-8 rounded-xl md:shadow-md w-full max-w-3xl mx-auto">
       <div
         ref={gridRef}
-        className="relative w-full max-w-md grid gap-2 md:gap-3"
+        className="relative w-full max-w-md grid gap-0"
         style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
       >
-        {board.map((val, idx) => (
-          <Box
-            key={idx}
-            value={val}
-            turn={previewMark}
-            disabled={disabled}
-            onClick={() => onCellClick(idx)}
-          />
-        ))}
+        {board.map((val, idx) => {
+          const col = idx % size;
+          const row = Math.floor(idx / size);
+          const borders = [
+            col < size - 1 ? "border-r" : "",
+            row < size - 1 ? "border-b" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <Box
+              key={idx}
+              value={val}
+              turn={previewMark}
+              disabled={disabled}
+              className={`border-gray-400 ${borders}`}
+              onClick={() => onCellClick(idx)}
+            />
+          );
+        })}
         {metrics && (
           <svg
             className="absolute inset-0 pointer-events-none"
@@ -200,6 +349,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                   x2={cx(c)}
                   y2={cy(c)}
                   stroke={line.mark === "X" ? "#2563eb" : "#dc2626"}
+                  strokeOpacity={0.6}
                   strokeWidth={strokeW}
                   strokeLinecap="round"
                 />
@@ -207,6 +357,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
             })}
           </svg>
         )}
+        {/* Confetti particles are appended here imperatively (kept empty in React
+            so reconciliation never fights the GSAP-managed nodes). */}
+        <div ref={confettiRef} className="absolute inset-0 z-10 pointer-events-none" />
       </div>
 
       {/* Right Panel */}

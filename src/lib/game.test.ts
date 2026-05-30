@@ -50,31 +50,31 @@ describe("scoredLines", () => {
     expect(scoredLines(board, 3)).toHaveLength(1);
   });
 
-  it("counts a run of 4 as one disjoint line", () => {
+  it("counts overlapping windows in a run of 4 as 2", () => {
     const board: Board = [
       "X", "X", "X", "X",
       null, null, null, null,
       null, null, null, null,
       null, null, null, null,
     ];
-    expect(scoredLines(board, 4)).toHaveLength(1);
+    expect(scoredLines(board, 4)).toHaveLength(2);
   });
 
-  it("counts a run of 5 as one disjoint line", () => {
+  it("counts a run of 5 as 3 windows", () => {
     const board: Board = Array(25).fill(null);
     for (let i = 0; i < 5; i++) board[i] = "X";
-    expect(scoredLines(board, 5)).toHaveLength(1);
+    expect(scoredLines(board, 5)).toHaveLength(3);
   });
 
-  it("counts a run of 6 as two disjoint lines", () => {
+  it("counts a run of 6 as 4 windows", () => {
     const board: Board = Array(36).fill(null);
     for (let i = 0; i < 6; i++) board[i] = "X";
-    expect(scoredLines(board, 6)).toHaveLength(2);
+    expect(scoredLines(board, 6)).toHaveLength(4);
   });
 
-  it("counts a shared centre (+ shape) as one line", () => {
+  it("counts a shared centre (+ shape) as two windows", () => {
     const board: Board = [null, "X", null, "X", "X", "X", null, "X", null];
-    expect(scoredLines(board, 3)).toHaveLength(1);
+    expect(scoredLines(board, 3)).toHaveLength(2);
   });
 
   it("counts two separate runs as two lines", () => {
@@ -89,26 +89,26 @@ describe("scoredLines", () => {
   });
 });
 
-describe("countLines (derived, disjoint)", () => {
-  it("run of 4 counts as 1", () => {
+describe("countLines (derived, overlapping windows)", () => {
+  it("counts overlapping windows in a run of 4 as 2", () => {
     const board: Board = [
       "X", "X", "X", "X",
       null, null, null, null,
       null, null, null, null,
       null, null, null, null,
     ];
-    expect(countLines(board, 4)).toEqual({ X: 1, O: 0 });
+    expect(countLines(board, 4)).toEqual({ X: 2, O: 0 });
   });
 
-  it("run of 6 counts as 2", () => {
+  it("run of 6 counts as 4 windows", () => {
     const board: Board = Array(36).fill(null);
     for (let i = 0; i < 6; i++) board[i] = "X";
-    expect(countLines(board, 6)).toEqual({ X: 2, O: 0 });
+    expect(countLines(board, 6)).toEqual({ X: 4, O: 0 });
   });
 
-  it("shared centre counts as 1", () => {
+  it("shared centre (+ shape) counts as 2", () => {
     const board: Board = [null, "X", null, "X", "X", "X", null, "X", null];
-    expect(countLines(board, 3)).toEqual({ X: 1, O: 0 });
+    expect(countLines(board, 3)).toEqual({ X: 2, O: 0 });
   });
 
   it("counts marks independently", () => {

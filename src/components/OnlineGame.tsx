@@ -170,13 +170,15 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
     if (data) setGame(data as GameRow);
   }, [game, myMark, code]);
 
-  // Auto-replay ~2s after a round ends (board full). Only seated players run the
-  // timer; the round guard in nextRound makes the reset idempotent.
+  // The win animation drives the round reset (it calls nextRound when the board
+  // "lands"). This timer is a fallback so play still advances if the animation
+  // is throttled (e.g. a backgrounded tab). Only seated players run it; the
+  // round guard in nextRound makes the reset idempotent across both clients.
   useEffect(() => {
     if (!game?.winner || !myMark) return;
     const timer = setTimeout(() => {
       nextRound();
-    }, 2000);
+    }, 8000);
     return () => clearTimeout(timer);
   }, [game?.winner, myMark, nextRound]);
 
@@ -231,6 +233,7 @@ const OnlineGame: React.FC<{ code: string }> = ({ code }) => {
         status={status}
         onCellClick={makeMove}
         onReset={nextRound}
+        onWinSequenceEnd={nextRound}
       />
     </div>
   );

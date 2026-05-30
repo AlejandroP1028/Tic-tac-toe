@@ -8,10 +8,11 @@ interface BoxProps {
   turn: "X" | "O";
   value: string | null;
   disabled?: boolean;
+  className?: string;
   onClick: () => void;
 }
 
-const Box: React.FC<BoxProps> = ({ value, onClick, turn, disabled }) => {
+const Box: React.FC<BoxProps> = ({ value, onClick, turn, disabled, className }) => {
   const finalRef = useRef<SVGSVGElement | null>(null); // for click animation
   const previewRef = useRef<SVGSVGElement | null>(null); // for hover preview
   const [hover, setHover] = useState(false);
@@ -58,7 +59,7 @@ const Box: React.FC<BoxProps> = ({ value, onClick, turn, disabled }) => {
       onMouseLeave={() => setHover(false)}
       onClick={onClick}
       disabled={disabled}
-      className="aspect-square w-full flex items-center justify-center border border-gray-400 rounded-xl hover:bg-gray-100 select-none disabled:cursor-not-allowed disabled:hover:bg-transparent"
+      className={`aspect-square w-full flex items-center justify-center hover:bg-gray-100 select-none disabled:cursor-not-allowed disabled:hover:bg-transparent ${className ?? ""}`}
     >
       {previewIcon()}
       {placedIcon()}

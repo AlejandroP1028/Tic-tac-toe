@@ -28,13 +28,12 @@ export function isFull(board: Board): boolean {
 }
 
 /**
- * Returns the disjoint set of scored 3-in-a-row lines on the board. A single
- * global pass claims squares (the `used` set), so no square belongs to more than
- * one counted line, in any direction. Cells are listed anchor-first.
+ * Returns every scored 3-in-a-row window of a single mark, in all 4 directions.
+ * Each window is anchored at its first cell, so overlapping runs count multiple
+ * times (a run of 4 in one direction = 2 windows). Cells are listed anchor-first.
  */
 export function scoredLines(board: Board, size: number): Line[] {
   const lines: Line[] = [];
-  const used = new Set<number>();
   for (let row = 0; row < size; row++) {
     for (let col = 0; col < size; col++) {
       const mark = board[row * size + col];
@@ -49,14 +48,13 @@ export function scoredLines(board: Board, size: number): Line[] {
         let ok = true;
         for (let k = 0; k < WIN_LENGTH; k++) {
           const idx = (row + dr * k) * size + (col + dc * k);
-          if (board[idx] !== mark || used.has(idx)) {
+          if (board[idx] !== mark) {
             ok = false;
             break;
           }
           cells.push(idx);
         }
         if (ok) {
-          for (const idx of cells) used.add(idx);
           lines.push({ cells: [cells[0], cells[1], cells[2]], mark });
         }
       }
