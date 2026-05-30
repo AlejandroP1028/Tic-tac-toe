@@ -60,6 +60,12 @@ describe("scoredLines", () => {
     expect(scoredLines(board, 4)).toHaveLength(1);
   });
 
+  it("counts a run of 5 as one disjoint line", () => {
+    const board: Board = Array(25).fill(null);
+    for (let i = 0; i < 5; i++) board[i] = "X";
+    expect(scoredLines(board, 5)).toHaveLength(1);
+  });
+
   it("counts a run of 6 as two disjoint lines", () => {
     const board: Board = Array(36).fill(null);
     for (let i = 0; i < 6; i++) board[i] = "X";
