@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  scoredLines,
   countLines,
   roundWinner,
   startingMark,
@@ -22,41 +23,92 @@ describe("isFull", () => {
   });
 });
 
-describe("countLines", () => {
-  it("counts a single horizontal window", () => {
+describe("scoredLines", () => {
+  it("finds a single horizontal line with correct cells and mark", () => {
     const board: Board = ["X", "X", "X", null, null, null, null, null, null];
-    expect(countLines(board, 3)).toEqual({ X: 1, O: 0 });
+    const lines = scoredLines(board, 3);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].mark).toBe("X");
+    expect([...lines[0].cells].sort((a, b) => a - b)).toEqual([0, 1, 2]);
   });
 
-  it("counts a single vertical window", () => {
+  it("finds a single vertical line", () => {
     const board: Board = ["O", null, null, "O", null, null, "O", null, null];
-    expect(countLines(board, 3)).toEqual({ X: 0, O: 1 });
+    const lines = scoredLines(board, 3);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].mark).toBe("O");
+    expect([...lines[0].cells].sort((a, b) => a - b)).toEqual([0, 3, 6]);
   });
 
-  it("counts the down-right diagonal", () => {
+  it("finds the down-right diagonal", () => {
     const board: Board = ["X", null, null, null, "X", null, null, null, "X"];
-    expect(countLines(board, 3)).toEqual({ X: 1, O: 0 });
+    expect(scoredLines(board, 3)).toHaveLength(1);
   });
 
-  it("counts the down-left diagonal", () => {
+  it("finds the down-left diagonal", () => {
     const board: Board = [null, null, "X", null, "X", null, "X", null, null];
-    expect(countLines(board, 3)).toEqual({ X: 1, O: 0 });
+    expect(scoredLines(board, 3)).toHaveLength(1);
   });
 
-  it("counts overlapping windows in a run of 4 as 2", () => {
+  it("counts a run of 4 as one disjoint line", () => {
     const board: Board = [
       "X", "X", "X", "X",
       null, null, null, null,
       null, null, null, null,
       null, null, null, null,
     ];
-    expect(countLines(board, 4)).toEqual({ X: 2, O: 0 });
+    expect(scoredLines(board, 4)).toHaveLength(1);
   });
 
-  it("counts a run of 5 as 3 windows", () => {
+  it("counts a run of 5 as one disjoint line", () => {
     const board: Board = Array(25).fill(null);
-    board[0] = board[1] = board[2] = board[3] = board[4] = "X";
-    expect(countLines(board, 5)).toEqual({ X: 3, O: 0 });
+    for (let i = 0; i < 5; i++) board[i] = "X";
+    expect(scoredLines(board, 5)).toHaveLength(1);
+  });
+
+  it("counts a run of 6 as two disjoint lines", () => {
+    const board: Board = Array(36).fill(null);
+    for (let i = 0; i < 6; i++) board[i] = "X";
+    expect(scoredLines(board, 6)).toHaveLength(2);
+  });
+
+  it("counts a shared centre (+ shape) as one line", () => {
+    const board: Board = [null, "X", null, "X", "X", "X", null, "X", null];
+    expect(scoredLines(board, 3)).toHaveLength(1);
+  });
+
+  it("counts two separate runs as two lines", () => {
+    const board: Board = Array(25).fill(null);
+    board[0] = board[1] = board[2] = "X";
+    board[10] = board[11] = board[12] = "X";
+    expect(scoredLines(board, 5)).toHaveLength(2);
+  });
+
+  it("returns [] for an empty board", () => {
+    expect(scoredLines(emptyBoard(4), 4)).toEqual([]);
+  });
+});
+
+describe("countLines (derived, disjoint)", () => {
+  it("run of 4 counts as 1", () => {
+    const board: Board = [
+      "X", "X", "X", "X",
+      null, null, null, null,
+      null, null, null, null,
+      null, null, null, null,
+    ];
+    expect(countLines(board, 4)).toEqual({ X: 1, O: 0 });
+  });
+
+  it("run of 6 counts as 2", () => {
+    const board: Board = Array(36).fill(null);
+    for (let i = 0; i < 6; i++) board[i] = "X";
+    expect(countLines(board, 6)).toEqual({ X: 2, O: 0 });
+  });
+
+  it("shared centre counts as 1", () => {
+    const board: Board = [null, "X", null, "X", "X", "X", null, "X", null];
+    expect(countLines(board, 3)).toEqual({ X: 1, O: 0 });
   });
 
   it("counts marks independently", () => {

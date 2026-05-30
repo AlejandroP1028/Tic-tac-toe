@@ -4,6 +4,11 @@ export type Board = Cell[];
 export type Winner = Mark | "Draw" | null;
 export type Tally = { X: number; O: number };
 
+export interface Line {
+  cells: [number, number, number];
+  mark: Mark;
+}
+
 export const WIN_LENGTH = 3;
 
 // [dRow, dCol] for the 4 line directions: →, ↓, ↘, ↙
@@ -23,12 +28,13 @@ export function isFull(board: Board): boolean {
 }
 
 /**
- * Counts every length-WIN_LENGTH window of a single mark, in all 4 directions.
- * Each window is anchored at its first cell, so overlapping runs count multiple
- * times (a run of 4 in one direction = 2 windows).
+ * Returns the disjoint set of scored 3-in-a-row lines on the board. A single
+ * global pass claims squares (the `used` set), so no square belongs to more than
+ * one counted line, in any direction. Cells are listed anchor-first.
  */
-export function countLines(board: Board, size: number): Tally {
-  const tally: Tally = { X: 0, O: 0 };
+export function scoredLines(board: Board, size: number): Line[] {
+  const lines: Line[] = [];
+  const used = new Set<number>();
   for (let row = 0; row < size; row++) {
     for (let col = 0; col < size; col++) {
       const mark = board[row * size + col];
@@ -39,16 +45,30 @@ export function countLines(board: Board, size: number): Tally {
         if (endRow < 0 || endRow >= size || endCol < 0 || endCol >= size) {
           continue;
         }
-        let win = true;
-        for (let k = 1; k < WIN_LENGTH; k++) {
-          if (board[(row + dr * k) * size + (col + dc * k)] !== mark) {
-            win = false;
+        const cells: number[] = [];
+        let ok = true;
+        for (let k = 0; k < WIN_LENGTH; k++) {
+          const idx = (row + dr * k) * size + (col + dc * k);
+          if (board[idx] !== mark || used.has(idx)) {
+            ok = false;
             break;
           }
+          cells.push(idx);
         }
-        if (win) tally[mark]++;
+        if (ok) {
+          for (const idx of cells) used.add(idx);
+          lines.push({ cells: [cells[0], cells[1], cells[2]], mark });
+        }
       }
     }
+  }
+  return lines;
+}
+
+export function countLines(board: Board, size: number): Tally {
+  const tally: Tally = { X: 0, O: 0 };
+  for (const line of scoredLines(board, size)) {
+    tally[line.mark]++;
   }
   return tally;
 }
