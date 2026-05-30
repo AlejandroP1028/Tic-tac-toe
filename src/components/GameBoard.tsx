@@ -51,7 +51,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const prevBoardRef = useRef<Board>(board);
   const prevLineKeysRef = useRef<Set<string>>(new Set());
   const lineEls = useRef<Map<string, SVGLineElement>>(new Map());
-  const [placed, setPlaced] = useState(-1);
 
   const playResultAnimation = (element: HTMLHeadingElement) => {
     gsap.killTweensOf(element);
@@ -129,17 +128,17 @@ const GameBoard: React.FC<GameBoardProps> = ({
   // Animate newly appeared lines (draw-on), then remember current keys + board.
   useEffect(() => {
     // Find the just-placed cell (null -> mark) to orient the draw-on animation.
-    let newPlaced = -1;
+    // Reading the ref here (in an effect) keeps render pure.
+    let placed = -1;
     const prevBoard = prevBoardRef.current;
     if (prevBoard.length === board.length) {
       for (let i = 0; i < board.length; i++) {
         if (!prevBoard[i] && board[i]) {
-          newPlaced = i;
+          placed = i;
           break;
         }
       }
     }
-    setPlaced(newPlaced);
 
     const prevKeys = prevLineKeysRef.current;
     for (const line of lines) {
@@ -148,9 +147,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
         const el = lineEls.current.get(key);
         if (el) {
           const len = el.getTotalLength();
+          // The line is drawn anchor (cells[0]) -> cells[2]. A positive dash
+          // offset draws from the anchor end; a negative one from the far end.
+          // Originate the draw at the just-placed mark when it is an endpoint.
+          const fromFarEnd = placed === line.cells[2];
           gsap.fromTo(
             el,
-            { strokeDasharray: len, strokeDashoffset: len },
+            { strokeDasharray: len, strokeDashoffset: fromFarEnd ? -len : len },
             { strokeDashoffset: 0, duration: 0.4, ease: "power2.out" }
           );
         }
@@ -185,8 +188,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
             {lines.map((line) => {
               const key = lineKey(line);
               const [a, , c] = line.cells;
-              const start = placed === c ? c : a;
-              const end = start === a ? c : a;
               return (
                 <line
                   key={key}
@@ -194,10 +195,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
                     if (el) lineEls.current.set(key, el);
                     else lineEls.current.delete(key);
                   }}
-                  x1={cx(start)}
-                  y1={cy(start)}
-                  x2={cx(end)}
-                  y2={cy(end)}
+                  x1={cx(a)}
+                  y1={cy(a)}
+                  x2={cx(c)}
+                  y2={cy(c)}
                   stroke={line.mark === "X" ? "#2563eb" : "#dc2626"}
                   strokeWidth={strokeW}
                   strokeLinecap="round"
