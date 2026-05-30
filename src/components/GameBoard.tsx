@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { X, Circle } from "lucide-react";
 import Box from "./Box";
-import type { Board, Mark, Winner } from "@/lib/game";
+import { scoredLines, type Board, type Line, type Mark, type Winner } from "@/lib/game";
 
 interface GameBoardProps {
   board: Board;
@@ -20,6 +20,8 @@ interface GameBoardProps {
   onCellClick: (idx: number) => void;
   onReset: () => void; // "skip round"
 }
+
+const lineKey = (line: Line) => [...line.cells].sort((a, b) => a - b).join("-");
 
 const GameBoard: React.FC<GameBoardProps> = ({
   board,
@@ -39,6 +41,17 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const scoreXRef = useRef<HTMLSpanElement>(null);
   const scoreORef = useRef<HTMLSpanElement>(null);
   const resultRef = useRef<HTMLHeadingElement>(null);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [metrics, setMetrics] = useState<{
+    w: number;
+    h: number;
+    gap: number;
+  } | null>(null);
+  const prevBoardRef = useRef<Board>(board);
+  const prevLineKeysRef = useRef<Set<string>>(new Set());
+  const lineEls = useRef<Map<string, SVGLineElement>>(new Map());
+  const [placed, setPlaced] = useState(-1);
 
   const playResultAnimation = (element: HTMLHeadingElement) => {
     gsap.killTweensOf(element);
@@ -84,13 +97,74 @@ const GameBoard: React.FC<GameBoardProps> = ({
     }
   }, [scores.O]);
 
+  // Measure the grid so the line overlay maps to exact cell centres.
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const gap = parseFloat(getComputedStyle(el).columnGap || "0") || 0;
+      setMetrics({ w: rect.width, h: rect.height, gap });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [size]);
+
   // Hover preview shows the player's own mark (spectators are disabled anyway).
   const previewMark: Mark = myMark ?? turn;
+
+  // Scored lines are derived from the board, so both clients render identically.
+  const lines = scoredLines(board, size);
+
+  // Cell-centre geometry (only meaningful once measured).
+  const gap = metrics?.gap ?? 0;
+  const cellW = metrics ? (metrics.w - (size - 1) * gap) / size : 0;
+  const cellH = metrics ? (metrics.h - (size - 1) * gap) / size : 0;
+  const cx = (idx: number) => (idx % size) * (cellW + gap) + cellW / 2;
+  const cy = (idx: number) => Math.floor(idx / size) * (cellH + gap) + cellH / 2;
+  const strokeW = Math.max(3, Math.min(cellW, cellH) * 0.15);
+
+  // Animate newly appeared lines (draw-on), then remember current keys + board.
+  useEffect(() => {
+    // Find the just-placed cell (null -> mark) to orient the draw-on animation.
+    let newPlaced = -1;
+    const prevBoard = prevBoardRef.current;
+    if (prevBoard.length === board.length) {
+      for (let i = 0; i < board.length; i++) {
+        if (!prevBoard[i] && board[i]) {
+          newPlaced = i;
+          break;
+        }
+      }
+    }
+    setPlaced(newPlaced);
+
+    const prevKeys = prevLineKeysRef.current;
+    for (const line of lines) {
+      const key = lineKey(line);
+      if (!prevKeys.has(key)) {
+        const el = lineEls.current.get(key);
+        if (el) {
+          const len = el.getTotalLength();
+          gsap.fromTo(
+            el,
+            { strokeDasharray: len, strokeDashoffset: len },
+            { strokeDashoffset: 0, duration: 0.4, ease: "power2.out" }
+          );
+        }
+      }
+    }
+    prevLineKeysRef.current = new Set(lines.map(lineKey));
+    prevBoardRef.current = board;
+  }, [board, lines]);
 
   return (
     <div className="flex flex-col md:flex-row justify-center items-center gap-8 bg-white/50 md:border md:border-gray-300 p-6 md:p-8 rounded-xl md:shadow-md w-full max-w-3xl mx-auto">
       <div
-        className="w-full max-w-md grid gap-2 md:gap-3"
+        ref={gridRef}
+        className="relative w-full max-w-md grid gap-2 md:gap-3"
         style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
       >
         {board.map((val, idx) => (
@@ -102,6 +176,36 @@ const GameBoard: React.FC<GameBoardProps> = ({
             onClick={() => onCellClick(idx)}
           />
         ))}
+        {metrics && (
+          <svg
+            className="absolute inset-0 pointer-events-none"
+            width={metrics.w}
+            height={metrics.h}
+          >
+            {lines.map((line) => {
+              const key = lineKey(line);
+              const [a, , c] = line.cells;
+              const start = placed === c ? c : a;
+              const end = start === a ? c : a;
+              return (
+                <line
+                  key={key}
+                  ref={(el) => {
+                    if (el) lineEls.current.set(key, el);
+                    else lineEls.current.delete(key);
+                  }}
+                  x1={cx(start)}
+                  y1={cy(start)}
+                  x2={cx(end)}
+                  y2={cy(end)}
+                  stroke={line.mark === "X" ? "#2563eb" : "#dc2626"}
+                  strokeWidth={strokeW}
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          </svg>
+        )}
       </div>
 
       {/* Right Panel */}
